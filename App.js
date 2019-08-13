@@ -28,8 +28,9 @@ const AppNavigator = createStackNavigator(
 const AppContainer = createAppContainer(AppNavigator);
 
 export default class App extends React.Component {
-  componentWillMount() {
+  componentDidMount() {
     GLOBAL.Qiscus = Qiscus;
+    GLOBAL.Firebase = Firebase;
     Qiscus.init();
     AsyncStorage.getItem("qiscus").then(
       res => {
@@ -41,20 +42,15 @@ export default class App extends React.Component {
         console.log("error getting login data", error);
       }
     );
-  }
-
-  componentDidMount() {
     this.subscription = Firebase.initiate$()
       .map(() => Firebase.createChannel())
       .map(() => Firebase.requestPermission$())
       .flatten()
       .map(() => Firebase.onNotification$())
       .flatten()
-      .map(it => Firebase.createNotification(it))
+      .map(notification => Firebase.createNotification(notification))
       .subscribe({
-        next: notification => {
-          Firebase.displayNotification(notification);
-        },
+        next: notification => Firebase.displayNotification(notification),
         error: error => console.log("error initiate firebase", error)
       });
   }
@@ -66,7 +62,7 @@ export default class App extends React.Component {
   render() {
     return (
       <>
-        {Platform.OS === 'ios' && <View style={{height: 20}} />}
+        {Platform.OS === "ios" && <View style={{ height: 20 }} />}
         <AppContainer
           style={styles.container}
           ref={ref => (this.navigation = ref && ref._navigation)}

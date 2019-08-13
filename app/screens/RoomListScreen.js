@@ -26,34 +26,30 @@ export default class RoomListScreen extends React.Component {
     this.setState({
       avatarURI: Qiscus.currentUser().avatar_url
     });
-    const subscription = Qiscus.isLogin$()
+    const loadRooms$ = Qiscus.isLogin$()
       .filter(isLogin => isLogin === true)
-      .take(1)
       .map(() => xs.from(Qiscus.qiscus.loadRoomList()))
       .flatten()
-      .subscribe({
-        next: rooms => {
-          this.setState({ rooms });
-          subscription.unsubscribe();
-        }
+      .map(rooms => this.setState({ rooms }));
+    const onNewMessage$ = Qiscus.newMessage$().map(message => {
+      this._onNewMessage(message);
+    });
+
+    const onNotificationOpened$ = Firebase.onNotificationOpened$().map(data => {
+      const notification = data.notification;
+      AsyncStorage.setItem("lastNotificationId", notification.notificationId);
+
+      const roomId = notification.data.qiscus_room_id;
+      this.props.navigation.push("Chat", {
+        roomId
       });
-    this.subscription = Qiscus.newMessage$().subscribe({
-      next: message => {
-        this._onNewMessage$(message);
-      }
     });
-
-    this.subscription2 = Firebase.onNotificationOpened$().subscribe({
-      next: data => {
-        const notification = data.notification;
-        AsyncStorage.setItem("lastNotificationId", notification.notificationId);
-
-        const roomId = notification.data.qiscus_room_id;
-        this.props.navigation.push("Chat", {
-          roomId
-        });
-      }
-    });
+    this.subscription = xs
+      .merge(loadRooms$, onNewMessage$, onNotificationOpened$)
+      .subscribe({
+        next: f => f,
+        error: err => console.log("err", err)
+      });
     Firebase.getInitialNotification().then(async data => {
       if (data == null) return;
       const notification = data.notification;
@@ -73,10 +69,9 @@ export default class RoomListScreen extends React.Component {
 
   componentWillUnmount() {
     if (this.subscription) this.subscription.unsubscribe();
-    if (this.subscription2) this.subscription2.unsubscribe();
   }
 
-  _onNewMessage$ = message => {
+  _onNewMessage = message => {
     const roomId = message.room_id;
     const room = this.state.rooms.find(r => r.id === roomId);
     if (room == null) return;

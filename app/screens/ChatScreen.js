@@ -34,30 +34,26 @@ export default class ChatScreen extends React.Component {
   componentDidMount() {
     const roomId = this.props.navigation.getParam("roomId", null);
     if (roomId == null) return this.props.navigation.replace("RoomList");
-    const subscription1 = Qiscus.isLogin$()
-      .take(1)
+    const loadRoom$ = Qiscus.isLogin$()
       .map(() => xs.from(Qiscus.qiscus.getRoomById(roomId)))
       .flatten()
-      .subscribe({
-        next: room => this.setState({ room })
+      .map((room) => {
+        this.setState({ room })
       });
-    const subscription2 = Qiscus.isLogin$()
-      .take(1)
+    const loadMessages$ = Qiscus.isLogin$()
       .map(() => xs.from(Qiscus.qiscus.loadComments(roomId)))
       .flatten()
-      .subscribe({
-        next: messages => {
-          const message = messages[0] || {};
-          const isLoadMoreable = message.comment_before_id !== 0;
-          const formattedMessages = messages.reduce((result, message) => {
-            result[message.unique_temp_id] = message;
-            return result;
-          }, {});
-          this.setState({
-            messages: formattedMessages,
-            isLoadMoreable
-          });
-        }
+      .map((messages) => {
+        const message = messages[0] || {};
+        const isLoadMoreable = message.comment_before_id !== 0;
+        const formattedMessages = messages.reduce((result, message) => {
+          result[message.unique_temp_id] = message;
+          return result;
+        }, {});
+        this.setState({
+          messages: formattedMessages,
+          isLoadMoreable
+        });
       });
 
     this.subscription = xs
@@ -68,7 +64,9 @@ export default class ChatScreen extends React.Component {
         Qiscus.onlinePresence$().map(this._onOnline),
         Qiscus.typing$()
           .filter(it => Number(it.room_id) === this.state.room.id)
-          .map(this._onTyping)
+          .map(this._onTyping),
+        loadRoom$,
+        loadMessages$,
       )
       .subscribe({
         next: () => {},
@@ -100,7 +98,7 @@ export default class ChatScreen extends React.Component {
         <Toolbar
           title={<Text style={styles.titleText}>
                   {roomName}
-                </Text>} 
+                </Text>}
           onPress={this._onToolbarClick}
           renderLeftButton={() => (
             <TouchableOpacity
